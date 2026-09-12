@@ -93,6 +93,12 @@ export interface BalanceProviderSpec {
 	parse: (json: unknown) => BalanceInfo | undefined;
 }
 
+/**
+ * 宿主运行时提供的 provider → apiKey 解析（pi/omp 的 ctx.modelRegistry）。
+ * pi 查 auth.json、omp 查 models.yml，扩展不必自己猜凭证存哪。
+ */
+export type ProviderKeyResolver = (provider: string) => Promise<string | undefined> | string | undefined;
+
 // ============================================================================
 // 响应头解析辅助
 // ============================================================================
@@ -150,7 +156,21 @@ function toMinutes(dur: number | undefined, unit: string | undefined): number | 
 // API key 解析：env → auth.json → models.json
 // ============================================================================
 
-function resolveKey(spec: { envKeys: string[]; authNames: string[]; modelsJsonProvider?: string }): string | undefined {
+/**
+ * 解析 provider 的 apiKey：宿主注册表 → 环境变量 → auth.json → models.json。
+ * 宿主注册表优先（pi/omp 各自知道凭证在哪）；本地文件探测作为兜底。
+ */
+async function resolveKey(
+	spec: { envKeys: string[]; authNames: string[]; modelsJsonProvider?: string },
+	provider: string | undefined,
+	hostResolver: ProviderKeyResolver | undefined,
+): Promise<string | undefined> {
+	if (hostResolver && provider) {
+		try {
+			const key = await hostResolver(provider);
+			if (key) return key;
+		} catch { /* 宿主解析失败 → 退回本地探测 */ }
+	}
 	for (const env of spec.envKeys) {
 		if (process.env[env]) return process.env[env];
 	}
@@ -251,7 +271,8 @@ export const PLAN_PROVIDERS: PlanProviderSpec[] = [
 		// 顶层 `usage` = 每周汇总；limits[] 携带各窗口明细，
 		// window.duration+timeUnit 标识窗口（300 MINUTES = 5h）。
 		// 数值字段可能是字符串；resetTime 是 ISO8601。
-		providers: ["kimi"],
+		// provider id：pi 为 kimi；omp 的 Kimi Coding Plan 为 kimi-code
+		providers: ["kimi", "kimi-code"],
 		envKeys: ["KIMI_CODE_API_KEY", "KIMI_API_KEY"],
 		authNames: ["kimi"],
 		modelsJsonProvider: "kimi",
@@ -343,8 +364,12 @@ export function findBalanceProvider(provider: string | undefined): BalanceProvid
 	return provider ? BALANCE_PROVIDERS.find((p) => p.providers.includes(provider)) : undefined;
 }
 
-async function pollPlanProvider(spec: PlanProviderSpec): Promise<PlanUsageInfo | undefined> {
-	const key = resolveKey(spec);
+async function pollPlanProvider(
+	spec: PlanProviderSpec,
+	provider: string,
+	hostResolver: ProviderKeyResolver | undefined,
+): Promise<PlanUsageInfo | undefined> {
+	const key = await resolveKey(spec, provider, hostResolver);
 	if (!key) return undefined;
 	try {
 		const res = await fetch(spec.url, {
@@ -360,8 +385,12 @@ async function pollPlanProvider(spec: PlanProviderSpec): Promise<PlanUsageInfo |
 	return undefined;
 }
 
-async function pollBalanceProvider(spec: BalanceProviderSpec): Promise<BalanceInfo | undefined> {
-	const key = resolveKey(spec);
+async function pollBalanceProvider(
+	spec: BalanceProviderSpec,
+	provider: string,
+	hostResolver: ProviderKeyResolver | undefined,
+): Promise<BalanceInfo | undefined> {
+	const key = await resolveKey(spec, provider, hostResolver);
 	if (!key) return undefined;
 	try {
 		const res = await fetch(spec.url, {
@@ -390,6 +419,7 @@ export class QuotaService {
 	debugDumpHeaders = false;
 
 	private provider: string | undefined;
+	private keyResolver: ProviderKeyResolver | undefined;
 	private planPollInFlight = false;
 	private balancePollInFlight = false;
 	private pollTimer: ReturnType<typeof setInterval> | undefined;
@@ -411,6 +441,11 @@ export class QuotaService {
 		return this.provider;
 	}
 
+	/** 设置宿主运行时的 key 解析器（ctx.modelRegistry）；配置后优先于本地文件探测。 */
+	setKeyResolver(resolver: ProviderKeyResolver | undefined): void {
+		this.keyResolver = resolver;
+	}
+
 	/** 切换 provider：丢弃旧数据并立即拉取新数据。provider 不变时是 no-op。 */
 	setProvider(provider: string | undefined): void {
 		if (provider === this.provider) return;
@@ -424,6 +459,7 @@ export class QuotaService {
 	/** 数据过期（>5min）时轮询配额/余额接口。render 里可放心每次调用。 */
 	maybePoll(force = false): void {
 		const provider = this.provider;
+		if (!provider) return;
 
 		const planSpec = findPlanProvider(provider);
 		if (planSpec) {
@@ -433,7 +469,7 @@ export class QuotaService {
 				|| Date.now() - this.planUsage.capturedAt > STALE_MS;
 			if (stale && !this.planPollInFlight) {
 				this.planPollInFlight = true;
-				pollPlanProvider(planSpec).then((info) => {
+				pollPlanProvider(planSpec, provider, this.keyResolver).then((info) => {
 					if (info && this.provider && findPlanProvider(this.provider)) {
 						this.planUsage = { ...info, source: this.provider };
 						this.notify();
@@ -450,7 +486,7 @@ export class QuotaService {
 				|| Date.now() - this.balanceInfo.capturedAt > STALE_MS;
 			if (stale && !this.balancePollInFlight) {
 				this.balancePollInFlight = true;
-				pollBalanceProvider(balSpec).then((info) => {
+				pollBalanceProvider(balSpec, provider, this.keyResolver).then((info) => {
 					if (info && this.provider && findBalanceProvider(this.provider)) {
 						this.balanceInfo = info;
 						this.notify();

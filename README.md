@@ -71,8 +71,14 @@ cp -r extensions/agent-hud ~/.omp/agent/extensions/
   影响，仍用 `placement` 自行摆放。
 - **git 分支**：pi 用 `footerData.getGitBranch()`；omp 没有该数据源，改用纯 fs 探测
   （`git-info.ts`，bubble 编辑器同款 worktree 感知逻辑，10s 缓存）。
-- **配置/凭证/插件目录**：`.pi`/`~/.pi/agent` 与 `.omp`/`~/.omp/agent` 都会读取
-  （本运行时目录优先，旧 pi 配置无缝生效）；auth.json/models.json 同理。
+- **配置目录（按运行时隔离）**：pi 读 `./.pi` + `~/.pi/agent`，omp 读 `./.omp` + `~/.omp/agent`，
+  同一运行时内项目级覆盖全局。配置文件名 pi 为 `pi-agent-hud.json`，omp 为 `omp-agent-hud.json`
+  （omp 兼容历史名 `pi-agent-hud.json`，规范名同名键优先）。两端默认显示不同（如 omp 的配额行），
+  因此**不跨运行时混读** —— 一侧的 `disabled` 不会静默关掉另一侧的元素；只有本运行时一个配置
+  文件都没有时才回退读另一侧的配置（旧 pi 用户切到 omp 免迁移）。
+- **凭证来源**：key 优先由宿主注册表解析（`ctx.modelRegistry.getApiKeyForProvider()`：pi 查
+  `auth.json`，omp 查 `models.yml`），失败再回退 `env → auth.json → models.json`。
+- **插件目录**：`.pi`/`~/.pi/agent` 与 `.omp`/`~/.omp/agent` 都会读取（本运行时目录优先）。
 - **覆盖运行时探测**：默认按进程名判断；需要强制时设 `PI_HUD_RUNTIME=pi|omp`
   （测试亦用此开关）。
 
@@ -206,7 +212,14 @@ AGENTS.md · skills x5 · ext.tools x2 · ✓ Grep ×10 · ◐ Edit (12s) · ◐
 
 ## 配置
 
-在 `.pi/pi-agent-hud.json`（项目级）或 `~/.pi/agent/pi-agent-hud.json`（全局）中配置：
+配置按运行时各读各的（互不影响）：
+
+| 运行时 | 项目级 | 全局 |
+|--------|--------|------|
+| pi | `.pi/pi-agent-hud.json` | `~/.pi/agent/pi-agent-hud.json` |
+| omp | `.omp/omp-agent-hud.json` | `~/.omp/agent/omp-agent-hud.json` |
+
+omp 兼容历史名 `pi-agent-hud.json`（同一目录下规范名同名键优先）。同一运行时内项目级覆盖全局。
 
 ```jsonc
 {
@@ -217,7 +230,7 @@ AGENTS.md · skills x5 · ext.tools x2 · ✓ Grep ×10 · ◐ Edit (12s) · ◐
   // 显示/隐藏元素
   "disabled": ["extCmds", "cost"],
 
-  // 调试：把响应中的限额相关 header 落盘到 ~/.pi/agent/pi-agent-hud-headers.jsonl
+  // 调试：把响应中的限额相关 header 落盘到运行时的 agent 目录（pi 为 ~/.pi/agent，omp 为 ~/.omp/agent）
   // （也可用环境变量 PI_HUD_DEBUG_HEADERS=1 开启）
   "debugDumpHeaders": false,
 
@@ -268,9 +281,9 @@ AGENTS.md · skills x5 · ext.tools x2 · ✓ Grep ×10 · ◐ Edit (12s) · ◐
 
 - **Claude 订阅（OAuth）**：解析 `anthropic-ratelimit-unified-5h-*` / `-7d-*` 响应头
 - **Codex（ChatGPT OAuth）**：解析 `x-codex-primary-*`（主窗口）/ `x-codex-secondary-*`（周窗口）响应头，窗口时长由服务端返回，自动适配
-- **GLM Coding Plan（智谱，provider id：pi 为 `zai-coding-cn`，omp 为 `zhipu-coding-plan`）**：响应头不含配额，HUD 每 5 分钟轮询 `open.bigmodel.cn/api/monitor/usage/quota/limit`（key 从环境变量 `ZAI_CODING_CN_API_KEY`/`ZHIPU_CODING_PLAN_API_KEY` 或 `~/.pi/agent/auth.json` 读取）。`TOKENS_LIMIT` 条目为 5h/周窗口，`TIME_LIMIT` 条目为月度工具配额（search/zread 等按月次数）
-- **MiniMax Coding Plan（minimax / minimax-cn）**：同样无响应头配额，HUD 每 5 分钟轮询 `api.minimaxi.com/v1/api/openplatform/coding_plan/remains`（key 来自 `MINIMAX_API_KEY` 或 `auth.json`）
-- **Kimi Coding Plan（kimi）**：同样无响应头配额，HUD 每 5 分钟轮询 `api.kimi.com/coding/v1/usages`（key 依次从 `KIMI_CODE_API_KEY`/`KIMI_API_KEY`、`auth.json`、或 `~/.pi/agent/models.json` 的 `providers.kimi.apiKey` 读取）
+- **GLM Coding Plan（智谱，provider id：pi 为 `zai-coding-cn`，omp 为 `zhipu-coding-plan`）**：响应头不含配额，HUD 每 5 分钟轮询 `open.bigmodel.cn/api/monitor/usage/quota/limit`（key 由宿主注册表 `ctx.modelRegistry` 解析；回退环境变量 `ZAI_CODING_CN_API_KEY`/`ZHIPU_CODING_PLAN_API_KEY`、`auth.json`）。`TOKENS_LIMIT` 条目为 5h/周窗口，`TIME_LIMIT` 条目为月度工具配额（search/zread 等按月次数）
+- **MiniMax Coding Plan（minimax / minimax-cn）**：同样无响应头配额，HUD 每 5 分钟轮询 `api.minimaxi.com/v1/api/openplatform/coding_plan/remains`（key 由宿主注册表解析；回退 `MINIMAX_API_KEY`/`MINIMAX_CN_API_KEY`、`auth.json`）
+- **Kimi Coding Plan（pi：`kimi`；omp：`kimi-code`）**：同样无响应头配额，HUD 每 5 分钟轮询 `api.kimi.com/coding/v1/usages`（key 由宿主注册表解析；回退 `KIMI_CODE_API_KEY`/`KIMI_API_KEY`、`auth.json`、`models.json` 的 `providers.kimi.apiKey`）
 - 颜色随用量变化：≤70% 绿 / >70% 黄 / >90% 红；`↻` 后为重置倒计时
 - 纯 API key（按量付费）没有 5h/周/月配额概念，这些元素会自动隐藏，仅显示 `rateLimit`
 
@@ -282,11 +295,11 @@ AGENTS.md · skills x5 · ext.tools x2 · ✓ Grep ×10 · ◐ Edit (12s) · ◐
 💰 ¥12.50
 ```
 
-- **DeepSeek**：轮询 `api.deepseek.com/user/balance`（key 依次从 `DEEPSEEK_API_KEY`、`auth.json`、`models.json` 的 `providers.deepseek.apiKey` 读取）
+- **DeepSeek**：轮询 `api.deepseek.com/user/balance`（key 由宿主注册表解析；回退 `DEEPSEEK_API_KEY`、`auth.json`）
 - 余额 ≤0 显示红色，<10 显示黄色，>10 绿色；超过 10 分钟未刷新变暗
 - 切换 provider 时自动清除旧余额数据
 
-不确定账号返回哪些头？开启 `"debugDumpHeaders": true`（或环境变量 `PI_HUD_DEBUG_HEADERS=1`），所有限额相关响应头会记录到 `~/.pi/agent/pi-agent-hud-headers.jsonl`。
+不确定账号返回哪些头？开启 `"debugDumpHeaders": true`（或环境变量 `PI_HUD_DEBUG_HEADERS=1`），所有限额相关响应头会记录到运行时的 agent 目录（pi：`~/.pi/agent/pi-agent-hud-headers.jsonl`，omp：`~/.omp/agent/pi-agent-hud-headers.jsonl`）。
 
 ## 网格布局
 

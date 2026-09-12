@@ -13,7 +13,8 @@
  * 编辑器:
  *   config.editor = "bubble" 启用气泡编辑器，运行时可用 /bubble 切换
  *
- * 配置: .pi/pi-agent-hud.json 或 ~/.pi/agent/pi-agent-hud.json
+ * 配置: pi → .pi/pi-agent-hud.json 或 ~/.pi/agent/pi-agent-hud.json
+ *       omp → .omp/omp-agent-hud.json 或 ~/.omp/agent/omp-agent-hud.json（兼容旧名 pi-agent-hud.json）
  * 插件: .pi/pi-agent-hud-plugins/*.js|ts（见 hud-footer.ts 的 HudPlugin）
  *
  * 模块结构:
@@ -141,6 +142,8 @@ export default function (pi: ExtensionAPI) {
 		config = loadConfig(ctx.cwd);
 		quota.debugDumpHeaders = !!config.debugDumpHeaders;
 		quota.setProvider((ctx.model as { provider?: string } | undefined)?.provider);
+		// key 交给宿主注册表：pi 查 auth.json、omp 查 models.yml，扩展不自己猜凭证位置。
+		quota.setKeyResolver((provider) => ctx.modelRegistry?.getApiKeyForProvider?.(provider));
 		quota.startPolling();
 
 		if (ctx.hasUI) {

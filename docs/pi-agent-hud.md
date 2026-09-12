@@ -183,7 +183,7 @@ Pi HUD 通过 pi-coding-agent 的 Extension API 获取所有数据，无需外�
 | Subagent 委派 | `tool_execution_start/end`（`subagent`/`task` 工具） |
 | 用户输入 | `input` 事件 |
 | 历史浮层 | `pi.registerShortcut()` + `ctx.ui.custom()` |
-| 配置 | `.pi/pi-agent-hud.json` + `~/.pi/agent/pi-agent-hud.json` |
+| 配置 | pi：`.pi/pi-agent-hud.json` + `~/.pi/agent/pi-agent-hud.json`；omp：`.omp/omp-agent-hud.json` + `~/.omp/agent/omp-agent-hud.json`（兼容旧名 `pi-agent-hud.json`，按运行时隔离） |
 | 插件 | `.pi/pi-agent-hud-plugins/*.js` + `~/.pi/agent/pi-agent-hud-plugins/*.js` |
 | 上下文文件 | 文件系统扫描 `existsSync()` |
 
@@ -222,7 +222,9 @@ Pi HUD 通过 pi-coding-agent 的 Extension API 获取所有数据，无需外�
 
 ## 配置
 
-在 `.pi/pi-agent-hud.json`（项目级）或 `~/.pi/agent/pi-agent-hud.json`（全局）中配置显示选项。
+按运行时读取各自的配置（互不影响）：pi 用 `.pi/pi-agent-hud.json` + `~/.pi/agent/pi-agent-hud.json`；
+omp 用 `.omp/omp-agent-hud.json` + `~/.omp/agent/omp-agent-hud.json`（兼容旧名 `pi-agent-hud.json`）。
+同一运行时内项目级覆盖全局。
 
 ### 配置项
 

@@ -68,3 +68,12 @@ export function agentConfigRoots(): string[] {
 export function projectConfigRoots(cwd: string): string[] {
 	return [join(cwd, ".omp"), join(cwd, ".pi")];
 }
+
+/**
+ * HUD 配置文件名（读取顺序，后读覆盖先读）。
+ * omp 先读历史名 pi-agent-hud.json，再读规范名 omp-agent-hud.json（同名键后者胜）。
+ */
+export const HUD_CONFIG_FILE_NAMES: Record<HudRuntime, string[]> = {
+	pi: ["pi-agent-hud.json"],
+	omp: ["pi-agent-hud.json", "omp-agent-hud.json"],
+};

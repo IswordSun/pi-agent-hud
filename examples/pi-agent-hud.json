@@ -12,7 +12,7 @@
   "// disabled": ["extCmds"],
 
   "// === Debug ===": "",
-  "// Dump rate-limit related response headers to ~/.pi/agent/pi-agent-hud-headers.jsonl": "",
+  "// Dump rate-limit related response headers to the runtime agent dir (pi: ~/.pi/agent, omp: ~/.omp/agent)": "",
   "// debugDumpHeaders": true,
 
   "// === Editor ===": "",

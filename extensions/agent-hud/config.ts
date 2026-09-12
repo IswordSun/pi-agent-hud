@@ -1,12 +1,15 @@
 /**
  * config.ts — 扩展配置：类型定义、加载、元素开关、上下文文件探测
  *
- * 配置文件：.pi/pi-agent-hud.json（项目）+ ~/.pi/agent/pi-agent-hud.json（全局）
+ * 配置文件（只读本运行时的）：
+ *   pi  → .pi/pi-agent-hud.json（项目）+ ~/.pi/agent/pi-agent-hud.json（全局）
+ *   omp → .omp/omp-agent-hud.json（项目）+ ~/.omp/agent/omp-agent-hud.json（全局）
+ *         （omp 兼容历史名 pi-agent-hud.json，规范名优先）
  */
 
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { agentConfigRoots, detectRuntime, projectConfigRoots } from "./runtime.ts";
+import { agentConfigRoot, agentConfigRoots, HUD_CONFIG_FILE_NAMES, type HudRuntime, detectRuntime } from "./runtime.ts";
 
 // ============================================================================
 // 类型
@@ -95,8 +98,12 @@ export interface HudConfig {
 
 /**
  * 加载并合并配置。
- * 全局：~/.pi/agent 与 ~/.omp/agent 都尝试（本运行时目录优先，后读覆盖先读）；
- * 项目：.pi 与 .omp 都尝试（同样本运行时优先）。
+ * 只读本运行时自己的目录：pi → ~/.pi/agent + ./.pi，omp → ~/.omp/agent + ./.omp
+ * （同一运行时内 全局 → 项目，后读覆盖先读）。两端默认显示不同，跨读会让一侧的
+ * disabled 静默关掉另一侧的元素，因此不混读。
+ * 例外：本运行时一个配置文件都没有时，回退读另一运行时的配置（旧 pi 用户切到 omp
+ * 免迁移）；一旦本运行时有了配置就完全隔离 —— 想要两端一致请显式复制文件。
+ * omp 兼容历史名 pi-agent-hud.json，规范名 omp-agent-hud.json（同名键以规范名为准）。
  */
 export function loadConfig(cwd: string): HudConfig {
 	const result: HudConfig = {
@@ -105,25 +112,25 @@ export function loadConfig(cwd: string): HudConfig {
 	};
 
 	const runtime = detectRuntime();
-	const roots = agentConfigRoots(); // [omp, pi]
-	const projRoots = projectConfigRoots(cwd); // [.omp, .pi]
-	// 后读覆盖先读：本运行时目录必须排在最后，否则 pi 配置会反过来压过 omp 配置。
-	const globalRoots = runtime === "omp" ? [...roots].reverse() : roots;
-	const projectOrder = runtime === "omp" ? [...projRoots].reverse() : projRoots;
+	const other: HudRuntime = runtime === "omp" ? "pi" : "omp";
+	const ownRoots = [agentConfigRoot(runtime), join(cwd, `.${runtime}`)];
+	const otherRoots = [agentConfigRoot(other), join(cwd, `.${other}`)];
 
-	const paths = [
-		...globalRoots.map((root) => join(root, "pi-agent-hud.json")),
-		...projectOrder.map((root) => join(root, "pi-agent-hud.json")),
-	];
+	// 先自己的目录；一个都不存在才回退到另一运行时（迁移期），避免两端默认互相污染。
+	let paths = ownRoots
+		.flatMap((root) => HUD_CONFIG_FILE_NAMES[runtime].map((name) => join(root, name)))
+		.filter(existsSync);
+	if (paths.length === 0) {
+		paths = otherRoots
+			.flatMap((root) => HUD_CONFIG_FILE_NAMES[other].map((name) => join(root, name)))
+			.filter(existsSync);
+	}
 
 	for (const p of paths) {
-		if (existsSync(p)) {
-			try {
-				const merged = { ...result, ...JSON.parse(readFileSync(p, "utf-8")) };
-				Object.assign(result, merged);
-			} catch {
-				// 忽略坏配置
-			}
+		try {
+			Object.assign(result, JSON.parse(readFileSync(p, "utf-8")));
+		} catch {
+			// 忽略坏配置
 		}
 	}
 

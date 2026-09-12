@@ -9,10 +9,11 @@
  *   - pi : ctx.ui.setFooter 捕获到组件，render(width) 产出各行；
  *   - omp: ctx.ui.setStatus 收到 hud-row-N 行（组件行被推到内建状态栏）。
  */
-import { mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { loadConfig } from "../extensions/agent-hud/config.ts";
 import { createHudFooter } from "../extensions/agent-hud/hud-footer.ts";
 import { formatWindowLabel } from "../extensions/agent-hud/layout.ts";
 import { findPlanProvider, QuotaService } from "../extensions/agent-hud/quota.ts";
@@ -345,6 +346,71 @@ function stripMarkup(text: string): string {
 		if (savedProfile === undefined) delete process.env.USERPROFILE;
 		else process.env.USERPROFILE = savedProfile;
 	}
+}
+
+// ---------------------------------------------------------------------------
+// 场景 4: 配置按运行时隔离 — pi 的全局配置不能关掉 omp 的配额元素
+// ---------------------------------------------------------------------------
+
+{
+	const home = mkdtempSync(join(tmpdir(), "hud-sim-home-"));
+	const cwd = mkdtempSync(join(tmpdir(), "hud-sim-proj-"));
+	const piAgent = join(home, ".pi", "agent");
+	const ompAgent = join(home, ".omp", "agent");
+	const projOmp = join(cwd, ".omp");
+	const savedHome = process.env.HOME;
+	const savedProfile = process.env.USERPROFILE;
+	process.env.HOME = home;
+	process.env.USERPROFILE = home;
+	try {
+		mkdirSync(piAgent, { recursive: true });
+		mkdirSync(ompAgent, { recursive: true });
+		mkdirSync(projOmp, { recursive: true });
+		writeFileSync(join(piAgent, "pi-agent-hud.json"), JSON.stringify({ disabled: ["balance", "plan5h"] }));
+
+		// 4a. omp 一个自有配置都没有 → 回退读 pi（迁移期，不制造回归）
+		setDetectedRuntime("omp");
+		let cfg = loadConfig(cwd);
+		check("config: omp 无自有配置时回退 pi 配置", cfg.disabled?.join(",") === "balance,plan5h", JSON.stringify(cfg));
+
+		// 4b. omp 写了历史名 → 不再读 pi；历史名生效
+		writeFileSync(join(ompAgent, "pi-agent-hud.json"), JSON.stringify({ disabled: ["model"] }));
+		cfg = loadConfig(cwd);
+		check("config: omp 有自有配置后与 pi 隔离", cfg.disabled?.join(",") === "model", JSON.stringify(cfg));
+
+		// 4c. 规范名 omp-agent-hud.json 覆盖历史名
+		writeFileSync(join(ompAgent, "omp-agent-hud.json"), JSON.stringify({ disabled: ["thinking"] }));
+		cfg = loadConfig(cwd);
+		check("config: omp-agent-hud.json 覆盖历史名", cfg.disabled?.join(",") === "thinking", JSON.stringify(cfg));
+
+		// 4d. 项目级覆盖全局（同运行时内后读覆盖先读）
+		writeFileSync(join(projOmp, "omp-agent-hud.json"), JSON.stringify({ disabled: ["project"] }));
+		cfg = loadConfig(cwd);
+		check("config: omp 项目级覆盖全局", cfg.disabled?.join(",") === "project", JSON.stringify(cfg));
+
+		// 4e. pi 不读 omp 的配置
+		setDetectedRuntime("pi");
+		cfg = loadConfig(cwd);
+		check("config: pi 只看 .pi/pi-agent-hud.json", cfg.disabled?.join(",") === "balance,plan5h", JSON.stringify(cfg));
+	} finally {
+		if (savedHome === undefined) delete process.env.HOME;
+		else process.env.HOME = savedHome;
+		if (savedProfile === undefined) delete process.env.USERPROFILE;
+		else process.env.USERPROFILE = savedProfile;
+		rmSync(home, { recursive: true, force: true });
+		rmSync(cwd, { recursive: true, force: true });
+	}
+}
+
+// ---------------------------------------------------------------------------
+// 场景 5: omp 的 provider id 命中配额 spec（kimi-code / minimax-cn）
+// ---------------------------------------------------------------------------
+
+{
+	const kimi = findPlanProvider("kimi-code");
+	check("omp-id: kimi-code 命中 Kimi 配额 spec", kimi?.url.includes("api.kimi.com") === true, kimi?.url ?? "none");
+	check("omp-id: kimi 与 kimi-code 同一 spec", findPlanProvider("kimi") === kimi);
+	check("omp-id: minimax-cn 命中 MiniMax 配额 spec", findPlanProvider("minimax-cn")?.url.includes("minimaxi.com") === true);
 }
 
 setDetectedRuntime(null);

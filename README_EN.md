@@ -152,7 +152,14 @@ The bubble editor shares the same quota service with the status bar — no dupli
 
 ## Configuration
 
-Configure via `.pi/pi-agent-hud.json` (project) or `~/.pi/agent/pi-agent-hud.json` (global):
+Configuration is per runtime (they never read each other's files):
+
+| Runtime | Project | Global |
+|---------|---------|--------|
+| pi | `.pi/pi-agent-hud.json` | `~/.pi/agent/pi-agent-hud.json` |
+| omp | `.omp/omp-agent-hud.json` | `~/.omp/agent/omp-agent-hud.json` |
+
+omp also accepts the legacy name `pi-agent-hud.json` (canonical name wins per key). Project overrides global within the same runtime.
 
 ```jsonc
 {
@@ -164,7 +171,7 @@ Configure via `.pi/pi-agent-hud.json` (project) or `~/.pi/agent/pi-agent-hud.jso
   "disabled": ["extCmds", "cost"],
 
   // Debug: dump rate-limit related response headers to
-  // ~/.pi/agent/pi-agent-hud-headers.jsonl (or set env PI_HUD_DEBUG_HEADERS=1)
+  // - runtime agent dir /pi-agent-hud-headers.jsonl (pi: ~/.pi/agent, omp: ~/.omp/agent; or set env PI_HUD_DEBUG_HEADERS=1)
   "debugDumpHeaders": false,
 
   // Editor component: "default" | "bubble" (bubble editor; toggle at runtime with /bubble)
@@ -232,7 +239,7 @@ When using pay-per-use APIs (e.g. DeepSeek), the HUD polls the balance endpoint 
 - Balance ≤0 shows red, <10 yellow, >10 green; dimmed when >10 min stale
 - Cleared automatically when switching providers
 
-Not sure which headers your account returns? Enable `"debugDumpHeaders": true` (or env `PI_HUD_DEBUG_HEADERS=1`) to log all rate-limit related headers to `~/.pi/agent/pi-agent-hud-headers.jsonl`.
+Not sure which headers your account returns? Enable `"debugDumpHeaders": true` (or env `PI_HUD_DEBUG_HEADERS=1`) to log all rate-limit related headers to the runtime agent dir (`~/.pi/agent/pi-agent-hud-headers.jsonl` for pi, `~/.omp/agent/pi-agent-hud-headers.jsonl` for omp).
 
 ## Grid Layout
 
