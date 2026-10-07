@@ -65,7 +65,7 @@ cp -r extensions/agent-hud ~/.omp/agent/extensions/
   注意：omp 内建栏自身已显示 model/git 分支/上下文/费用，HUD 行会追加在其下方，
   重复元素可用配置 `disabled` 关掉；且 omp 状态行经 `sanitizeStatusText` 过滤，
   **不保留颜色**（pi 端保持原样彩色）。
-- **配额行**：omp 下 费用/余额/5h/周/月限 默认抽离为单独一行（HUD 第 2 行，位于
+- **配额行**：omp 下 provider/费用/余额/5h/周/月限 默认抽离为单独一行（HUD 第 2 行，位于
   上下文/信息行之下），不再与统计行/输入行混排；设 `quotaRow: false` 可关闭。
   pi 默认不启用（历史布局不变），需要时设 `quotaRow: true`。layout 网格模式不受
   影响，仍用 `placement` 自行摆放。
@@ -258,11 +258,12 @@ omp 兼容历史名 `pi-agent-hud.json`（同一目录下规范名同名键优�
 | `extCmds` | 扩展命令数量 | ✅ |
 | `tokens` | Token 明细 | ✅ |
 | `cost` | 费用 | ✅ |
+| `provider` | 用量组前的 provider id（如 `opencode-go`/`deepseek`），同名模型据此区分后端；按 provider 调色板着色 | ✅ |
 | `balance` | 💰 账户余额（DeepSeek 等按量付费 API） | ✅ |
 | `rateLimit` | ⚡ API 额度剩余（Anthropic/OpenAI 自动检测） | ✅ |
-| `plan5h` | ⏳ Coding Plan 5小时窗口用量（Claude 订阅 / Codex OAuth） | ✅ |
-| `planWeek` | 📅 Coding Plan 周窗口用量（Claude 订阅 / Codex OAuth） | ✅ |
-| `planMonth` | 🗓mo Coding Plan 月度窗口用量（GLM TIME_LIMIT） | ✅ |
+| `plan5h` | ⏳ Coding Plan 5小时窗口用量（Claude 订阅 / Codex OAuth / OpenCode Go） | ✅ |
+| `planWeek` | 📅 Coding Plan 周窗口用量（Claude 订阅 / Codex OAuth / OpenCode Go） | ✅ |
+| `planMonth` | 🗓mo Coding Plan 月度窗口用量（GLM TIME_LIMIT / OpenCode Go） | ✅ |
 | `toolStats` | 工具调用统计 | ✅ |
 | `runningTools` | 正在执行的工具 | ✅ |
 | `runningAgents` | 正在运行的 Agent | ✅ |
@@ -273,7 +274,7 @@ omp 兼容历史名 `pi-agent-hud.json`（同一目录下规范名同名键优�
 
 ## Coding Plan 用量（5小时 / 周 / 月限额）
 
-使用订阅配额（Claude Pro/Max 订阅、ChatGPT Codex OAuth）时，HUD 会自动解析配额窗口并显示：
+使用订阅配额（Claude Pro/Max 订阅、ChatGPT Codex OAuth、OpenCode Go 等）时，HUD 会自动解析配额窗口并显示：
 
 ```
 ⏳5h 42% ↻2h15m · 📅wk 18% ↻3d4h · 🗓mo 12% ↻12d3h
@@ -284,6 +285,7 @@ omp 兼容历史名 `pi-agent-hud.json`（同一目录下规范名同名键优�
 - **GLM Coding Plan（智谱，provider id：pi 为 `zai-coding-cn`，omp 为 `zhipu-coding-plan`）**：响应头不含配额，HUD 每 5 分钟轮询 `open.bigmodel.cn/api/monitor/usage/quota/limit`（key 由宿主注册表 `ctx.modelRegistry` 解析；回退环境变量 `ZAI_CODING_CN_API_KEY`/`ZHIPU_CODING_PLAN_API_KEY`、`auth.json`）。`TOKENS_LIMIT` 条目为 5h/周窗口，`TIME_LIMIT` 条目为月度工具配额（search/zread 等按月次数）
 - **MiniMax Coding Plan（minimax / minimax-cn）**：同样无响应头配额，HUD 每 5 分钟轮询 `api.minimaxi.com/v1/api/openplatform/coding_plan/remains`（key 由宿主注册表解析；回退 `MINIMAX_API_KEY`/`MINIMAX_CN_API_KEY`、`auth.json`）
 - **Kimi Coding Plan（pi：`kimi`；omp：`kimi-code`）**：同样无响应头配额，HUD 每 5 分钟轮询 `api.kimi.com/coding/v1/usages`（key 由宿主注册表解析；回退 `KIMI_CODE_API_KEY`/`KIMI_API_KEY`、`auth.json`、`models.json` 的 `providers.kimi.apiKey`）
+- **OpenCode Go 订阅（provider id：pi / omp 均为 `opencode-go`）**：同样无响应头配额，HUD 每 5 分钟轮询 `opencode.ai/zen/go/v1/usage`（key 由宿主注册表解析；回退 `OPENCODE_API_KEY`、`auth.json` 的 `opencode-go`）。`rolling` → 5h 窗口（月度额度的 20%）、`weekly` → 周窗口（50%）、`monthly` → 月窗口（100%）；接口返回的是【已用】百分比
 - 颜色随用量变化：≤70% 绿 / >70% 黄 / >90% 红；`↻` 后为重置倒计时
 - 纯 API key（按量付费）没有 5h/周/月配额概念，这些元素会自动隐藏，仅显示 `rateLimit`
 

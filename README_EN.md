@@ -198,11 +198,12 @@ omp also accepts the legacy name `pi-agent-hud.json` (canonical name wins per ke
 | `extCmds` | Extension commands count | ✅ |
 | `tokens` | Token breakdown | ✅ |
 | `cost` | Session cost | ✅ |
+| `provider` | Provider id in front of the usage group (`opencode-go`/`deepseek`), so same-named models are distinguishable; colored from the provider palette | ✅ |
 | `balance` | 💰 Account balance (DeepSeek & pay-per-use APIs) | ✅ |
 | `rateLimit` | ⚡ API rate limit remaining (Anthropic/OpenAI auto-detected) | ✅ |
-| `plan5h` | ⏳ Coding plan 5-hour window usage (Claude subscription / Codex OAuth) | ✅ |
-| `planWeek` | 📅 Coding plan weekly window usage (Claude subscription / Codex OAuth) | ✅ |
-| `planMonth` | 🗓mo Coding plan monthly window usage (GLM TIME_LIMIT) | ✅ |
+| `plan5h` | ⏳ Coding plan 5-hour window usage (Claude subscription / Codex OAuth / OpenCode Go) | ✅ |
+| `planWeek` | 📅 Coding plan weekly window usage (Claude subscription / Codex OAuth / OpenCode Go) | ✅ |
+| `planMonth` | 🗓mo Coding plan monthly window usage (GLM TIME_LIMIT / OpenCode Go) | ✅ |
 | `toolStats` | Completed tool stats | ✅ |
 | `runningTools` | Running tools | ✅ |
 | `runningAgents` | Running agents | ✅ |
@@ -213,7 +214,7 @@ See [examples/pi-agent-hud.json](examples/pi-agent-hud.json) for a full configur
 
 ## Coding Plan Usage (5-hour / Weekly / Monthly Limits)
 
-When using subscription quotas (Claude Pro/Max, ChatGPT Codex OAuth), the HUD parses quota windows automatically and shows:
+When using subscription quotas (Claude Pro/Max, ChatGPT Codex OAuth, OpenCode Go, …), the HUD parses quota windows automatically and shows:
 
 ```
 ⏳5h 42% ↻2h15m · 📅wk 18% ↻3d4h · 🗓mo 12% ↻12d3h
@@ -224,6 +225,7 @@ When using subscription quotas (Claude Pro/Max, ChatGPT Codex OAuth), the HUD pa
 - **GLM Coding Plan (provider id: `zai-coding-cn` on pi, `zhipu-coding-plan` on omp)**: responses carry no quota headers, so the HUD polls `open.bigmodel.cn/api/monitor/usage/quota/limit` every 5 min (key from env `ZAI_CODING_CN_API_KEY`/`ZHIPU_CODING_PLAN_API_KEY` or `~/.pi/agent/auth.json`). `TOKENS_LIMIT` entries map to the 5h/weekly windows; `TIME_LIMIT` is the monthly tool quota (search/zread requests per month)
 - **MiniMax Coding Plan (minimax / minimax-cn)**: same — polls `api.minimaxi.com/v1/api/openplatform/coding_plan/remains` every 5 min (key from env `MINIMAX_API_KEY` or `auth.json`)
 - **Kimi Coding Plan (kimi)**: same — polls `api.kimi.com/coding/v1/usages` every 5 min (key from env `KIMI_CODE_API_KEY`/`KIMI_API_KEY`, `auth.json`, or `~/.pi/agent/models.json` `providers.kimi.apiKey`)
+- **OpenCode Go subscription (provider id `opencode-go` on pi and omp)**: same — polls `opencode.ai/zen/go/v1/usage` every 5 min (key from the host registry, else env `OPENCODE_API_KEY` or `auth.json`). `rolling` → 5h window (20% of the monthly limit), `weekly` → weekly (50%), `monthly` → monthly (100%); the API reports *used* percent
 - Color scales with usage: ≤70% green / >70% yellow / >90% red; `↻` shows the reset countdown
 - Plain API keys (pay-as-you-go) have no 5h/weekly/monthly quotas — these elements stay hidden and only `rateLimit` is shown
 

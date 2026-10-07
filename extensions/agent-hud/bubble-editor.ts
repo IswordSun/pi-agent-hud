@@ -11,7 +11,7 @@
 import { CustomEditor, type ExtensionAPI, type ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { truncateToWidth, visibleWidth, type TUI } from "@mariozechner/pi-tui";
 import { readGitInfo } from "./git-info.ts";
-import { formatResetCountdown } from "./layout.ts";
+import { formatResetCountdown, paintProvider } from "./layout.ts";
 import type { QuotaService } from "./quota.ts";
 
 // ============================================================================
@@ -147,30 +147,40 @@ export function installBubbleEditor(
 			const provIcon = ICONS.providers[providerId] ?? (ICON_MODE === "emoji" ? "🤖" : "●");
 			const sep = ICONS.sep;
 
-			// 左边：模型 + thinking + 用量
-			const leftParts: string[] = [];
-			if (modelId) leftParts.push(iconText(provIcon, modelId));
+			// 左边：模型 + thinking · provider · 用量
+			// （provider 走调色板单独上色；模型与用量沿用整段 provider 配色）
+			const headParts: string[] = [];
+			if (modelId) headParts.push(iconText(provIcon, modelId));
 			// thinking 档位：仅推理模型且非 off 时显示（与 HUD 逻辑一致）
 			const thinking = pi.getThinkingLevel?.() ?? "";
-			if (modelReasoning && thinking && thinking !== "off") leftParts.push(thinking);
+			if (modelReasoning && thinking && thinking !== "off") headParts.push(thinking);
+
+			const usageParts: string[] = [];
 			if (planUsage?.fiveHour) {
 				const w5 = planUsage.fiveHour;
 				const r5 = w5.resetAt ? formatResetCountdown(w5.resetAt) : "";
-				leftParts.push(`5h:${Math.round(w5.usedPercent)}%${r5 ? ` ↻${r5}` : ""}`);
+				usageParts.push(`5h:${Math.round(w5.usedPercent)}%${r5 ? ` ↻${r5}` : ""}`);
 			}
 			if (planUsage?.weekly) {
 				const w7 = planUsage.weekly;
 				const r7 = w7.resetAt ? formatResetCountdown(w7.resetAt) : "";
-				leftParts.push(`7d:${Math.round(w7.usedPercent)}%${r7 ? ` ↻${r7}` : ""}`);
+				usageParts.push(`7d:${Math.round(w7.usedPercent)}%${r7 ? ` ↻${r7}` : ""}`);
 			}
 
 			if (planUsage?.monthly) {
 				const mo = planUsage.monthly;
 				const rm = mo.resetAt ? formatResetCountdown(mo.resetAt) : "";
-				leftParts.push(`mo:${Math.round(mo.usedPercent)}%${rm ? ` ↻${rm}` : ""}`);
+				usageParts.push(`mo:${Math.round(mo.usedPercent)}%${rm ? ` ↻${rm}` : ""}`);
 			}
-			if (balanceInfo) leftParts.push(iconText(ICONS.money, balanceInfo.label));
-			const leftText = leftParts.join(sep);
+			if (balanceInfo) usageParts.push(iconText(ICONS.money, balanceInfo.label));
+
+			// provider id：用量窗口前标明后端（opencode-go / deepseek … 同名模型靠它区分）
+			const providerLabel = providerId ? paintProvider(providerId, providerId) ?? color(providerId) : "";
+			const leftText = [
+				headParts.length > 0 ? color(headParts.join(sep)) : "",
+				providerLabel,
+				usageParts.length > 0 ? color(usageParts.join(sep)) : "",
+			].filter((s) => s !== "").join(sep);
 
 			// 右边：工程信息（worktree：主工作区显示 main，linked 显示其名称）
 			const rightParts: string[] = [];

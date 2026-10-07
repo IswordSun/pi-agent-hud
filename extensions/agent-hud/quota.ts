@@ -318,6 +318,37 @@ export const PLAN_PROVIDERS: PlanProviderSpec[] = [
 			return fiveHour || weekly ? { fiveHour, weekly } : undefined;
 		},
 	},
+	{
+		// OpenCode Go（订阅，$10/月 Go / $40/月 Go Plus）: GET /zen/go/v1/usage
+		// 三窗口：rolling = 5h（月度额度的 20%）、weekly（50%）、monthly（100%）。
+		// percent 是【已用】百分比（omp 内建 usage provider 同源解析），resetsAt 是 ISO8601。
+		// provider id：pi / omp 均为 opencode-go（Zen 按量付费是 opencode-zen，无此订阅接口）。
+		providers: ["opencode-go"],
+		envKeys: ["OPENCODE_API_KEY"],
+		authNames: ["opencode-go"],
+		url: "https://opencode.ai/zen/go/v1/usage",
+		headers: (key) => ({ Authorization: `Bearer ${key}` }),
+		parse: (json) => {
+			const usage = asRecord(asRecord(json)?.usage);
+			if (!usage) return undefined;
+			const row = (v: unknown, windowMinutes: number): PlanWindowUsage | undefined => {
+				const w = asRecord(v);
+				if (!w) return undefined;
+				const pct = num(w.percent);
+				if (pct == null) return undefined;
+				const resetRaw = w.resetsAt;
+				return {
+					usedPercent: Math.min(100, Math.max(0, pct)),
+					windowMinutes,
+					resetAt: resetRaw == null ? undefined : parseResetHeader(typeof resetRaw === "string" ? resetRaw : String(resetRaw)),
+				};
+			};
+			const fiveHour = row(usage.rolling, 5 * 60);
+			const weekly = row(usage.weekly, 7 * 24 * 60);
+			const monthly = row(usage.monthly, 30 * 24 * 60);
+			return fiveHour || weekly || monthly ? { fiveHour, weekly, monthly } : undefined;
+		},
+	},
 ];
 
 // ============================================================================

@@ -254,6 +254,7 @@ omp 用 `.omp/omp-agent-hud.json` + `~/.omp/agent/omp-agent-hud.json`（兼容�
 | `extCmds` | 扩展命令数量 |
 | `tokens` | Token 明细 `↑12.5k ↓3.2k` |
 | `cost` | 费用 `$0.042` |
+| `provider` | 用量组前的 provider id `opencode-go` / `deepseek`（同名模型据此区分后端；按 provider 调色板着色，只有 pi 端看得见颜色） |
 | `rateLimit` | API 额度剩余 `⚡ 85% 120k/400k` |
 | `toolStats` | 已完成工具统计 `✓ Grep ×10` |
 | `runningTools` | 正在执行的工具 `◐ Edit (12s)` |

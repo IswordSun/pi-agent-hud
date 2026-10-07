@@ -29,6 +29,7 @@ export type HudElement =
 	| "extCmds"        // Line 2: cmds x3
 	| "tokens"         // Line 2: ↑12.5k ↓3.2k
 	| "cost"           // Line 2: $0.042
+	| "provider"       // Line 2: opencode-go (provider id, rendered in front of the usage group)
 	| "balance"        // Line 2: 💰 ¥12.50 (LLM account balance)
 	| "rateLimit"      // Line 2: ⚡ 85% (Anthropic/OpenAI rate limit)
 	| "plan5h"         // Line 2: ⏳5h 42% ↻2h15m (coding plan 5-hour window)
@@ -73,7 +74,7 @@ export interface HudConfig {
 	 */
 	placement?: Record<string, Placement>;
 	/**
-	 * 把 费用/余额/5h/周/月限 抽离原行，单独聚成一条配额行（经典单列模式）。
+	 * 把 provider/费用/余额/5h/周/月限 抽离原行，单独聚成一条配额行（经典单列模式）。
 	 * 默认 undefined = 自动：omp 下启用、pi 下不启用（pi 历史布局不变）。
 	 * 显式 true/false 可覆盖两端默认。layout 网格模式不受影响（自行用 placement 摆放）。
 	 */

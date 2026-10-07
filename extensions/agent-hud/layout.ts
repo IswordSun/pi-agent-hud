@@ -41,6 +41,35 @@ export function formatWindowLabel(minutes: number): string {
 	return `${minutes}m`;
 }
 
+/** provider id → ANSI 256 前景色（区分后端用；色值取自各家品牌色近似的终端色） */
+export const PROVIDER_FG: Record<string, number> = {
+	anthropic: 208,
+	openai: 42,
+	google: 69,
+	deepseek: 39,
+	"zai-coding-cn": 141,
+	"zhipu-coding-plan": 141,
+	minimax: 204,
+	"minimax-cn": 204,
+	"kimi-code": 214,
+	kimi: 214,
+	opencode: 45,
+	"opencode-go": 45,
+	"opencode-zen": 45,
+};
+
+/**
+ * provider 名着色：收录的 provider 返回 ANSI 着色文本，其余返回 undefined
+ * （回退样式由调用方决定，footer 用 accent、bubble 用整段配色）。
+ *
+ * 注意：只有 pi 的 footer/bubble 是组件渲染，颜色可见；omp 状态行在渲染前经
+ * `sanitizeStatusText()` 剥掉 ANSI 并整行按 dim 渲染，颜色拿不回来。
+ */
+export function paintProvider(provider: string, text: string): string | undefined {
+	const fg = PROVIDER_FG[provider];
+	return fg === undefined ? undefined : `\x1b[38;5;${fg}m${text}\x1b[39m`;
+}
+
 /** 距离重置时间戳的倒计时: "2h15m", "3d4h", 过期则 "now" */
 export function formatResetCountdown(resetAt: number): string {
 	const ms = resetAt - Date.now();

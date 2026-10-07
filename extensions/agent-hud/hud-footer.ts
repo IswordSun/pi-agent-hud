@@ -35,6 +35,7 @@ import {
 	formatResetCountdown,
 	formatTokens,
 	formatWindowLabel,
+	paintProvider,
 	progressBar,
 	renderGrid,
 	type CellItem,
@@ -565,6 +566,19 @@ function buildHudFooterFactory(
 						render: () => theme.fg("dim", `cmds x${extCmds.length}`),
 					});
 				}
+
+				// provider 标签：钉在用量组最前 —— 配额行里在费用之前（opencode-go · $0.042 · 💰… · ⏳…），
+				// pi 经典单列布局里在余额/配额之前（…ext.tools · opencode-go · 💰… · ⏳…）。
+				// 配色走 PROVIDER_FG 调色板；未收录的 provider 用主题 accent。
+				// （omp 状态行由宿主 sanitize 掉 ANSI，只有 pi 端看得见颜色。）
+				if (isEnabled(config, "provider") && provider) {
+					quotaLine2({
+						key: "provider", defaultLine: 1, order: quotaOwnRow ? -1 : 5,
+						fixedCol: config.placement?.provider?.col,
+						render: () => paintProvider(provider, provider) ?? theme.fg("accent", provider),
+					});
+				}
+
 				if (isEnabled(config, "balance") && balanceInfo) {
 					const ageMs = Date.now() - balanceInfo.capturedAt;
 					const fresh = ageMs < 10 * 60_000; // <10min 算新鲜
