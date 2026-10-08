@@ -167,7 +167,7 @@ function resolveKey(spec: { envKeys: string[]; authNames: string[]; modelsJsonPr
 // 编码计划配额 provider 注册表
 // ============================================================================
 
-/** GLM Coding Plan 配额响应解析：TOKENS_LIMIT 条目 unit 3 = 小时窗口、unit 6 = 天窗口。key 失效时返回 HTTP 200 + success:false，抛 AuthRejectedError。 */
+/** GLM Coding Plan 配额响应解析：window 条目 unit 3 = 小时窗口、unit 6 = 天窗口。key 失效时返回 HTTP 200 + success:false，抛 AuthRejectedError。 */
 function parseZaiQuota(json: any): { fiveHour?: PlanWindowUsage; weekly?: PlanWindowUsage } | undefined {
 	if (json?.success === false) throw new AuthRejectedError("zai: success:false");
 	const limits = json?.data?.limits;
@@ -175,7 +175,8 @@ function parseZaiQuota(json: any): { fiveHour?: PlanWindowUsage; weekly?: PlanWi
 	let fiveHour: PlanWindowUsage | undefined;
 	let weekly: PlanWindowUsage | undefined;
 	for (const l of limits) {
-		if (l?.type !== "TOKENS_LIMIT") continue;
+		// 接口已把 type 从 TOKENS_LIMIT 改为 CREDIT_LIMIT（2026-10 观察），两者都接受
+		if (l?.type !== "TOKENS_LIMIT" && l?.type !== "CREDIT_LIMIT") continue;
 		const w: PlanWindowUsage = {
 			usedPercent: typeof l.percentage === "number" ? Math.max(0, Math.min(100, l.percentage)) : 0,
 			resetAt: typeof l.nextResetTime === "number" ? l.nextResetTime : undefined,

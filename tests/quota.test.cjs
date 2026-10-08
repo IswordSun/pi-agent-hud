@@ -75,6 +75,25 @@ test('zai parse handles TOKENS_LIMIT windows and rejects success:false', () => {
 	assert.throws(() => findPlan('zai').parse({ success: false }, 'x'), quota.AuthRejectedError);
 });
 
+test('zai parse accepts the CREDIT_LIMIT type now returned by the live API', () => {
+	// 2026-10 线上实际响应：type 已从 TOKENS_LIMIT 变为 CREDIT_LIMIT
+	const parse = findPlan('zai-coding-cn').parse;
+	const out = parse({
+		code: 200,
+		msg: '操作成功',
+		data: { level: 'pro', limits: [
+			{ type: 'CREDIT_LIMIT', unit: 3, number: 5, usage: 12000, currentValue: 3728, remaining: 8271, percentage: 31, nextResetTime: 1791432294100 },
+			{ type: 'CREDIT_LIMIT', unit: 6, number: 1, usage: 60000, currentValue: 18938, remaining: 41061, percentage: 31, nextResetTime: 1791796394998 },
+		] },
+		success: true,
+	}, 'x');
+	assert.equal(out.fiveHour.usedPercent, 31);
+	assert.equal(out.fiveHour.windowMinutes, 300);
+	assert.equal(out.weekly.usedPercent, 31);
+	assert.equal(out.weekly.windowMinutes, 24 * 60);
+	assert.equal(out.fiveHour.resetAt, 1791432294100);
+});
+
 test('zai intl spec sends the raw key without Bearer', () => {
 	const spec = findPlan('zai');
 	assert.equal(spec.url, 'https://api.z.ai/api/monitor/usage/quota/limit');
